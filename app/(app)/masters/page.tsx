@@ -159,8 +159,8 @@ export default function MastersPage() {
         subtitle="Maintain dropdown values anytime. These power the SKU generator and dispatch customer list."
       />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MasterBox table="categories" title="Categories" subtitle="Example: Bottle, Cap, Pump, Jar, etc." />
-        <MasterBox table="components" title="Components" subtitle="Example: Body, Cap, Tip, Inner plug, etc." />
+        <MasterBox table="categories" title="Categories" subtitle="Example: Lipstick, Vaseline, Lipbalm, Talcum" />
+        <MasterBox table="components" title="Components" subtitle="Example: Body, Cap, Seal, etc." />
         <MasterBox table="colors" title="Colors" subtitle="Example: Clear, White, Black, Rose Gold, etc." />
         <MasterBox table="customers" title="Customers" subtitle="Company/customer names for Dispatch and Customer History." />
       </div>
