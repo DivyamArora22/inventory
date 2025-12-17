@@ -15,7 +15,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique,
-  role text not null default 'staff' check (role in ('owner','staff')),
+  role text not null default 'staff' check (role in ('owner','staff','supervisor')),
   created_at timestamptz not null default now()
 );
 
@@ -61,6 +61,18 @@ as $$
     from public.profiles p
     where p.id = auth.uid()
       and p.role = 'staff'
+  );
+$$;
+
+create or replace function public.is_supervisor()
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid()
+      and p.role = 'supervisor'
   );
 $$;
 

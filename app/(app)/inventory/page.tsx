@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import SectionHeader from "@/components/SectionHeader";
 import OwnerDeleteDialog from "@/components/OwnerDeleteDialog";
+import { useRole } from "@/components/RoleProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { piecesToBags, toFloatOrZero, toIntOrZero } from "@/lib/utils";
 
@@ -31,6 +32,12 @@ function codeFromName(name: string) {
 }
 
 export default function InventoryPage() {
+  const { role } = useRole();
+  const isOwner = role === "owner";
+  const isSupervisor = role === "supervisor";
+
+  const [activeTab, setActiveTab] = useState<"add" | "view">("view");
+
   const [categories, setCategories] = useState<Master[]>([]);
   const [components, setComponents] = useState<Master[]>([]);
   const [colors, setColors] = useState<Master[]>([]);
@@ -40,7 +47,7 @@ export default function InventoryPage() {
 
   const [search, setSearch] = useState("");
 
-  // Add / Edit form fields
+  // Add / Edit form fields (owner only)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [itemNumber, setItemNumber] = useState("");
   const [name, setName] = useState("");
@@ -53,7 +60,6 @@ export default function InventoryPage() {
   const [lowStockTh, setLowStockTh] = useState("");
   const [initialQtyType, setInitialQtyType] = useState<"pieces" | "bags">("pieces");
   const [initialQty, setInitialQty] = useState("");
-
   const [saving, setSaving] = useState(false);
   const [formMsg, setFormMsg] = useState<string | null>(null);
 
@@ -77,11 +83,7 @@ export default function InventoryPage() {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter((i) => {
-      return (
-        String(i.item_number).includes(q) ||
-        i.name.toLowerCase().includes(q) ||
-        i.sku.toLowerCase().includes(q)
-      );
+      return String(i.item_number).includes(q) || i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q);
     });
   }, [items, search]);
 
@@ -111,7 +113,9 @@ export default function InventoryPage() {
       supabase.from("colors").select("id,name").order("name"),
       supabase
         .from("items")
-        .select("id,item_number,name,sku,size_num,weight_g,pieces_per_bag,low_stock_threshold_pieces,stock_pieces,category_id,component_id,color_id,category:categories(id,name),component:components(id,name),color:colors(id,name)")
+        .select(
+          "id,item_number,name,sku,size_num,weight_g,pieces_per_bag,low_stock_threshold_pieces,stock_pieces,category_id,component_id,color_id,category:categories(id,name),component:components(id,name),color:colors(id,name)"
+        )
         .order("item_number", { ascending: true }),
     ]);
 
@@ -128,9 +132,12 @@ export default function InventoryPage() {
 
   useEffect(() => {
     loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function startEdit(i: Item) {
+    if (!isOwner) return;
+
     setEditingId(i.id);
     setItemNumber(String(i.item_number ?? ""));
     setName(i.name ?? "");
@@ -144,16 +151,24 @@ export default function InventoryPage() {
     setInitialQtyType("pieces");
     setInitialQty("");
     setFormMsg(null);
+
+    setActiveTab("add");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function deleteItem(id: string) {
+    if (!isOwner) return;
     setDeleteId(id);
   }
 
   async function saveItem(e: React.FormEvent) {
     e.preventDefault();
     setFormMsg(null);
+
+    if (!isOwner) {
+      setFormMsg("Only the owner can add or edit items.");
+      return;
+    }
 
     const nItemNumber = itemNumber ? toIntOrZero(itemNumber) : nextItemNumber;
     const nSize = toIntOrZero(sizeNum);
@@ -224,6 +239,7 @@ export default function InventoryPage() {
       }
 
       await loadAll();
+
       // Keep message but clear fields for new entries
       if (!editingId) {
         setName("");
@@ -240,24 +256,64 @@ export default function InventoryPage() {
     }
   }
 
+  function printInventory() {
+    // Print ALL inventory (not filtered), with only item name, color, qty in bags.
+    window.print();
+  }
+
+  const printRows = useMemo(() => {
+    return items
+      .slice()
+      .sort((a, b) => (a.item_number ?? 0) - (b.item_number ?? 0))
+      .map((i) => {
+        const bagsOnly = i.pieces_per_bag ? Math.floor((i.stock_pieces ?? 0) / i.pieces_per_bag) : 0;
+        return { id: i.id, name: i.name, color: i.color?.name ?? "", bags: bagsOnly };
+      });
+  }, [items]);
+
   return (
     <div className="space-y-4">
       <SectionHeader
         title="Inventory"
-        subtitle="Add items, view stock, search, edit or delete. Stock is stored in pieces, but you can view as bags too."
+        subtitle="Add items (owner only), and search/view stock with low-stock highlights."
         right={
-          <button className="btn" onClick={resetForm} type="button">
-            Clear form
-          </button>
+          <div className="flex gap-2">
+            <button
+              className={"btn " + (activeTab === "add" ? "btn-primary" : "")}
+              type="button"
+              onClick={() => setActiveTab("add")}
+            >
+              Add item
+            </button>
+            <button
+              className={"btn " + (activeTab === "view" ? "btn-primary" : "")}
+              type="button"
+              onClick={() => setActiveTab("view")}
+            >
+              View stock
+            </button>
+            {activeTab === "add" && isOwner ? (
+              <button className="btn" onClick={resetForm} type="button">
+                Clear form
+              </button>
+            ) : null}
+          </div>
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {activeTab === "add" ? (
         <div className="card p-5">
           <div className="font-semibold">{editingId ? "Edit item" : "Add new item"}</div>
+
           <div className="text-xs text-gray-600 mt-1">
             Next item number suggestion: <span className="font-mono">{nextItemNumber}</span>
           </div>
+
+          {isSupervisor ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Supervisor can view this screen, but only the <span className="font-semibold">owner</span> can add or edit items.
+            </div>
+          ) : null}
 
           <form className="mt-4 space-y-3" onSubmit={saveItem}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -268,18 +324,19 @@ export default function InventoryPage() {
                   value={itemNumber}
                   onChange={(e) => setItemNumber(e.target.value)}
                   placeholder={String(nextItemNumber)}
+                  disabled={!isOwner}
                 />
               </div>
               <div>
                 <label className="text-sm font-medium">Item name</label>
-                <input className="input mt-1" value={name} onChange={(e) => setName(e.target.value)} required />
+                <input className="input mt-1" value={name} onChange={(e) => setName(e.target.value)} required disabled={!isOwner} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-sm font-medium">Category</label>
-                <select className="select mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <select className="select mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={!isOwner}>
                   <option value="">Select</option>
                   {categories.map((x) => (
                     <option key={x.id} value={x.id}>
@@ -290,7 +347,7 @@ export default function InventoryPage() {
               </div>
               <div>
                 <label className="text-sm font-medium">Component</label>
-                <select className="select mt-1" value={componentId} onChange={(e) => setComponentId(e.target.value)}>
+                <select className="select mt-1" value={componentId} onChange={(e) => setComponentId(e.target.value)} disabled={!isOwner}>
                   <option value="">Select</option>
                   {components.map((x) => (
                     <option key={x.id} value={x.id}>
@@ -301,7 +358,7 @@ export default function InventoryPage() {
               </div>
               <div>
                 <label className="text-sm font-medium">Color</label>
-                <select className="select mt-1" value={colorId} onChange={(e) => setColorId(e.target.value)}>
+                <select className="select mt-1" value={colorId} onChange={(e) => setColorId(e.target.value)} disabled={!isOwner}>
                   <option value="">Select</option>
                   {colors.map((x) => (
                     <option key={x.id} value={x.id}>
@@ -315,12 +372,7 @@ export default function InventoryPage() {
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>
                 <label className="text-sm font-medium">Size (number)</label>
-                <input
-                  className="input mt-1"
-                  value={sizeNum}
-                  onChange={(e) => setSizeNum(e.target.value)}
-                  placeholder="28"
-                />
+                <input className="input mt-1" value={sizeNum} onChange={(e) => setSizeNum(e.target.value)} placeholder="28" disabled={!isOwner} />
               </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Auto-generated SKU</label>
@@ -328,81 +380,70 @@ export default function InventoryPage() {
               </div>
               <div>
                 <label className="text-sm font-medium">Weight per piece (g)</label>
-                <input
-                  className="input mt-1"
-                  value={weightG}
-                  onChange={(e) => setWeightG(e.target.value)}
-                  placeholder="12.5"
-                />
+                <input className="input mt-1" value={weightG} onChange={(e) => setWeightG(e.target.value)} placeholder="12.5" disabled={!isOwner} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-sm font-medium">Standard packing (pieces per bag)</label>
-                <input
-                  className="input mt-1"
-                  value={piecesPerBag}
-                  onChange={(e) => setPiecesPerBag(e.target.value)}
-                  placeholder="100"
-                />
+                <input className="input mt-1" value={piecesPerBag} onChange={(e) => setPiecesPerBag(e.target.value)} placeholder="100" disabled={!isOwner} />
               </div>
               <div>
                 <label className="text-sm font-medium">Low stock threshold (pieces)</label>
-                <input
-                  className="input mt-1"
-                  value={lowStockTh}
-                  onChange={(e) => setLowStockTh(e.target.value)}
-                  placeholder="Optional"
-                />
+                <input className="input mt-1" value={lowStockTh} onChange={(e) => setLowStockTh(e.target.value)} placeholder="Optional" disabled={!isOwner} />
               </div>
               <div>
                 <label className="text-sm font-medium">Initial stock</label>
                 <div className="mt-1 flex gap-2">
-                  <select
-                    className="select"
-                    value={initialQtyType}
-                    onChange={(e) => setInitialQtyType(e.target.value as any)}
-                  >
+                  <select className="select" value={initialQtyType} onChange={(e) => setInitialQtyType(e.target.value as any)} disabled={!isOwner}>
                     <option value="pieces">Pieces</option>
                     <option value="bags">Bags</option>
                   </select>
-                  <input
-                    className="input"
-                    value={initialQty}
-                    onChange={(e) => setInitialQty(e.target.value)}
-                    placeholder="0"
-                  />
+                  <input className="input" value={initialQty} onChange={(e) => setInitialQty(e.target.value)} placeholder="0" disabled={!isOwner} />
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  On edit, this adds to current stock (does not overwrite).
-                </div>
+                <div className="text-xs text-gray-500 mt-1">On edit, this adds to current stock (does not overwrite).</div>
               </div>
             </div>
 
-            {formMsg ? (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">{formMsg}</div>
-            ) : null}
+            {formMsg ? <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">{formMsg}</div> : null}
 
-            <div className="flex gap-2">
-              <button className="btn btn-primary" disabled={saving}>
-                {saving ? "Saving…" : editingId ? "Update item" : "Add item"}
-              </button>
-              {editingId ? (
-                <button className="btn" type="button" onClick={resetForm}>
-                  Cancel edit
+            {isOwner ? (
+              <div className="flex gap-2">
+                <button className="btn btn-primary" disabled={saving}>
+                  {saving ? "Saving…" : editingId ? "Update item" : "Add item"}
                 </button>
-              ) : null}
-            </div>
+                {editingId ? (
+                  <button className="btn" type="button" onClick={resetForm}>
+                    Cancel edit
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </form>
 
           <div className="text-xs text-gray-500 mt-4">
-            Tip: Manage dropdown lists in <span className="font-medium">Masters</span>.
+            Tip: Manage dropdown lists in <span className="font-medium">Masters</span> (owner & staff only).
           </div>
         </div>
-
+      ) : (
         <div className="card p-5">
-          <div className="font-semibold">Search & View stock</div>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold">Search & View stock</div>
+              <div className="text-xs text-gray-600 mt-1">
+                Row colors: <span className="badge border-red-200 bg-red-50 text-red-700">0 stock</span>{" "}
+                <span className="badge border-amber-200 bg-amber-50 text-amber-700">low stock</span>
+              </div>
+            </div>
+
+            {(isOwner || isSupervisor) ? (
+              <button className="btn" type="button" onClick={printInventory}>
+                Print inventory
+              </button>
+            ) : null}
+          </div>
+
           <div className="mt-3">
             <input
               className="input"
@@ -413,6 +454,7 @@ export default function InventoryPage() {
           </div>
 
           {error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}
+
           <div className="mt-3 overflow-x-auto">
             <table className="table">
               <thead>
@@ -421,19 +463,19 @@ export default function InventoryPage() {
                   <th>SKU</th>
                   <th>Name</th>
                   <th>Stock</th>
-                  <th></th>
+                  {isOwner ? <th /> : null}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="py-6 text-gray-500">
+                    <td colSpan={isOwner ? 5 : 4} className="py-6 text-gray-500">
                       Loading…
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-6 text-gray-500">
+                    <td colSpan={isOwner ? 5 : 4} className="py-6 text-gray-500">
                       No items found.
                     </td>
                   </tr>
@@ -460,14 +502,17 @@ export default function InventoryPage() {
                             {bags.bags} bags{bags.leftoverPieces ? ` + ${bags.leftoverPieces} pcs` : ""}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap">
-                          <button className="btn text-sm mr-2" onClick={() => startEdit(i)} type="button">
-                            Edit
-                          </button>
-                          <button className="btn btn-danger text-sm" onClick={() => deleteItem(i.id)} type="button">
-                            Delete
-                          </button>
-                        </td>
+
+                        {isOwner ? (
+                          <td className="whitespace-nowrap">
+                            <button className="btn text-sm mr-2" onClick={() => startEdit(i)} type="button">
+                              Edit
+                            </button>
+                            <button className="btn btn-danger text-sm" onClick={() => deleteItem(i.id)} type="button">
+                              Delete
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })
@@ -476,12 +521,32 @@ export default function InventoryPage() {
             </table>
           </div>
 
-          <div className="text-xs text-gray-500 mt-3">
-            Row colors: <span className="badge border-red-200 bg-red-50 text-red-700">0 stock</span>{" "}
-            <span className="badge border-amber-200 bg-amber-50 text-amber-700">low stock</span>
+          {/* Print-only content */}
+          <div className="print-only mt-6">
+            <h1 className="text-xl font-semibold">Inventory List</h1>
+            <div className="text-sm text-gray-600 mt-1">Generated on {new Date().toLocaleString()}</div>
+            <table className="table mt-4">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Color</th>
+                  <th>Qty (bags)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {printRows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="font-medium">{r.name}</td>
+                    <td>{r.color || "-"}</td>
+                    <td>{r.bags}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      )}
+
       <OwnerDeleteDialog
         open={!!deleteId}
         title="Delete item"

@@ -7,8 +7,11 @@ import { useRole } from "@/components/RoleProvider";
 // Staff should be able to enter Dispatch + Inward + Masters.
 const STAFF_ALLOWED_PREFIXES = ["/dispatch", "/inward", "/masters"];
 
-function isStaffAllowedPath(pathname: string) {
-  return STAFF_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+// Supervisor should be able to view Dashboard + Inventory (view/print + read-only add form tab).
+const SUPERVISOR_ALLOWED_PREFIXES = ["/dashboard", "/inventory"];
+
+function isAllowed(prefixes: string[], pathname: string) {
+  return prefixes.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
 export default function RoleRouteGuard({ children }: { children: React.ReactNode }) {
@@ -18,8 +21,15 @@ export default function RoleRouteGuard({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (loading) return;
-    if (role === "staff" && !isStaffAllowedPath(pathname)) {
+
+    if (role === "staff" && !isAllowed(STAFF_ALLOWED_PREFIXES, pathname)) {
       router.replace("/dispatch");
+      return;
+    }
+
+    if (role === "supervisor" && !isAllowed(SUPERVISOR_ALLOWED_PREFIXES, pathname)) {
+      router.replace("/dashboard");
+      return;
     }
   }, [loading, role, pathname, router]);
 
@@ -33,6 +43,5 @@ export default function RoleRouteGuard({ children }: { children: React.ReactNode
     );
   }
 
-  // If staff navigates to a blocked route, the effect will redirect.
   return <>{children}</>;
 }

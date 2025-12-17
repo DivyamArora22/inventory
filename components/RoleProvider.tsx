@@ -1,9 +1,9 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export type UserRole = "owner" | "staff";
+export type UserRole = "owner" | "staff" | "supervisor";
 
 type RoleContextValue = {
   loading: boolean;
@@ -21,13 +21,22 @@ const RoleContext = createContext<RoleContextValue>({
   refresh: async () => {},
 });
 
+function withTimeout<T>(p: Promise<T>, ms: number, label = "timeout"): Promise<T> {
+  let t: any;
+  const timeout = new Promise<T>((_, rej) => {
+    t = setTimeout(() => rej(new Error(label)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(t));
+}
+
 async function fetchRole(userId: string): Promise<UserRole> {
   const { data, error } = await supabase.from("profiles").select("role").eq("id", userId).single();
   if (error) {
     // If profile row doesn't exist yet (rare), default to staff.
     return "staff";
   }
-  return (data?.role as UserRole) ?? "staff";
+  const r = (data?.role as UserRole) ?? "staff";
+  return r === "owner" || r === "staff" || r === "supervisor" ? r : "staff";
 }
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
@@ -35,31 +44,52 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
   async function refresh() {
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
-    if (!user) {
+    try {
+      setLoading(true);
+
+      // getSession() is fast and reads local storage; avoids hanging requests on tab-switch.
+      const { data } = await withTimeout(supabase.auth.getSession(), 8000, "session_timeout");
+      const session = data.session;
+
+      if (!session?.user) {
+        if (!mountedRef.current) return;
+        setRole(null);
+        setEmail(null);
+        setUserId(null);
+        return;
+      }
+
+      const user = session.user;
+      if (!mountedRef.current) return;
+
+      setEmail(user.email ?? null);
+      setUserId(user.id);
+
+      const r = await withTimeout(fetchRole(user.id), 8000, "role_timeout");
+      if (!mountedRef.current) return;
+      setRole(r);
+    } catch {
+      // Never get stuck on a blank "Loading…" screen.
+      if (!mountedRef.current) return;
       setRole(null);
       setEmail(null);
       setUserId(null);
-      return;
+    } finally {
+      if (!mountedRef.current) return;
+      setLoading(false);
     }
-    setEmail(user.email ?? null);
-    setUserId(user.id);
-    const r = await fetchRole(user.id);
-    setRole(r);
   }
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
 
-    (async () => {
-      await refresh();
-      if (mounted) setLoading(false);
-    })();
+    refresh();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mountedRef.current) return;
       if (!session?.user) {
         setRole(null);
         setEmail(null);
@@ -67,14 +97,25 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      setLoading(true);
       await refresh();
-      setLoading(false);
     });
 
+    const onFocus = () => {
+      // When returning to the tab, refresh session+role.
+      refresh();
+    };
+    window.addEventListener("focus", onFocus);
+
+    const onVis = () => {
+      if (!document.hidden) onFocus();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
     return () => {
-      mounted = false;
+      mountedRef.current = false;
       sub.subscription.unsubscribe();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

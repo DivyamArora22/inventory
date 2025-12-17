@@ -60,7 +60,7 @@ export default function UsersPage() {
     <div className="space-y-4">
       <SectionHeader
         title="Users"
-        subtitle="Set roles: owner can access everything; staff can only enter Dispatch + Inward. Staff accounts can sign up from the Login page, then you promote them here."
+        subtitle="Set roles: Owner can access everything. Supervisor can view Dashboard + Inventory and print stock (but cannot edit/delete items). Staff can enter Dispatch + Inward + Masters."
         right={
           <button className="btn" type="button" onClick={load}>
             Refresh
@@ -111,6 +111,7 @@ export default function UsersPage() {
                         onChange={(e) => setUserRole(r.id, e.target.value as UserRole)}
                       >
                         <option value="staff">Staff</option>
+                        <option value="supervisor">Supervisor</option>
                         <option value="owner">Owner</option>
                       </select>
                     </td>

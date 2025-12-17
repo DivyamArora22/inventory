@@ -49,3 +49,29 @@ body {
 .table td {
   @apply py-2 border-b border-gray-100 align-top;
 }
+
+
+/* Printing */
+.print-only {
+  display: none;
+}
+
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden;
+  }
+  /* Show print content */
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
+  .print-only {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+  }
+}

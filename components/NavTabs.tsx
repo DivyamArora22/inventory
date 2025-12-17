@@ -23,12 +23,17 @@ const staffTabs = [
   { href: "/masters", label: "Masters" },
 ];
 
+const supervisorTabs = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/inventory", label: "Inventory" },
+];
+
 export default function NavTabs() {
   const pathname = usePathname();
   const router = useRouter();
   const { email, role } = useRole();
 
-  const tabs = role === "owner" ? ownerTabs : staffTabs;
+  const tabs = role === "owner" ? ownerTabs : role === "supervisor" ? supervisorTabs : staffTabs;
 
   async function signOut() {
     await supabase.auth.signOut();
