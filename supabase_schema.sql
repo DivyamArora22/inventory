@@ -391,22 +391,30 @@ with check (public.is_owner());
 drop policy if exists "masters_select_all" on public.categories;
 create policy "masters_select_all" on public.categories for select to authenticated using (true);
 drop policy if exists "masters_write_owner" on public.categories;
-create policy "masters_write_owner" on public.categories for all to authenticated using (public.is_owner() or public.is_staff()) with check (public.is_owner() or public.is_staff());
+create policy "masters_write_owner" on public.categories for all to authenticated
+using (public.is_owner() or public.is_staff() or public.is_supervisor())
+with check (public.is_owner() or public.is_staff() or public.is_supervisor());
 
 drop policy if exists "masters_select_all" on public.components;
 create policy "masters_select_all" on public.components for select to authenticated using (true);
 drop policy if exists "masters_write_owner" on public.components;
-create policy "masters_write_owner" on public.components for all to authenticated using (public.is_owner() or public.is_staff()) with check (public.is_owner() or public.is_staff());
+create policy "masters_write_owner" on public.components for all to authenticated
+using (public.is_owner() or public.is_staff() or public.is_supervisor())
+with check (public.is_owner() or public.is_staff() or public.is_supervisor());
 
 drop policy if exists "masters_select_all" on public.colors;
 create policy "masters_select_all" on public.colors for select to authenticated using (true);
 drop policy if exists "masters_write_owner" on public.colors;
-create policy "masters_write_owner" on public.colors for all to authenticated using (public.is_owner() or public.is_staff()) with check (public.is_owner() or public.is_staff());
+create policy "masters_write_owner" on public.colors for all to authenticated
+using (public.is_owner() or public.is_staff() or public.is_supervisor())
+with check (public.is_owner() or public.is_staff() or public.is_supervisor());
 
 drop policy if exists "masters_select_all" on public.customers;
 create policy "masters_select_all" on public.customers for select to authenticated using (true);
 drop policy if exists "masters_write_owner" on public.customers;
-create policy "masters_write_owner" on public.customers for all to authenticated using (public.is_owner() or public.is_staff()) with check (public.is_owner() or public.is_staff());
+create policy "masters_write_owner" on public.customers for all to authenticated
+using (public.is_owner() or public.is_staff() or public.is_supervisor())
+with check (public.is_owner() or public.is_staff() or public.is_supervisor());
 
 -- Items (read for everyone, write for owner)
 drop policy if exists "items_select_all" on public.items;

@@ -26,6 +26,9 @@ const staffTabs = [
 const supervisorTabs = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/inventory", label: "Inventory" },
+  { href: "/dispatch", label: "Dispatch" },
+  { href: "/inward", label: "Inward" },
+  { href: "/masters", label: "Masters" },
 ];
 
 export default function NavTabs() {

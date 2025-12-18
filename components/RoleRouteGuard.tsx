@@ -7,8 +7,9 @@ import { useRole } from "@/components/RoleProvider";
 // Staff should be able to enter Dispatch + Inward + Masters.
 const STAFF_ALLOWED_PREFIXES = ["/dispatch", "/inward", "/masters"];
 
-// Supervisor should be able to view Dashboard + Inventory (view/print + read-only add form tab).
-const SUPERVISOR_ALLOWED_PREFIXES = ["/dashboard", "/inventory"];
+// Supervisor should be able to access Dispatch + Inward + Masters (like staff)
+// PLUS Dashboard + Inventory (view/print + read-only add form tab).
+const SUPERVISOR_ALLOWED_PREFIXES = ["/dashboard", "/inventory", "/dispatch", "/inward", "/masters"];
 
 function isAllowed(prefixes: string[], pathname: string) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + "/"));
