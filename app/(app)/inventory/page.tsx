@@ -272,6 +272,7 @@ export default function InventoryPage() {
 
   const printRows = useMemo(() => {
     return items
+      .filter((item) => (item.stock_pieces ?? 0) > 0)
       .slice()
       .sort((a, b) => (a.item_number ?? 0) - (b.item_number ?? 0))
       .map((i) => {
